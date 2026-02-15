@@ -1,111 +1,106 @@
-let state = null;
-let hls = null;
+let config = null;
 
-function byId(id) {
-  return document.getElementById(id);
+function channelTemplate(channel, isActive) {
+  return `
+  <div class="channel">
+    <label><input type="radio" name="active_channel" value="${channel.id}" ${isActive ? "checked" : ""}> Active</label><br>
+    <input placeholder="id" value="${channel.id}" data-field="id" />
+    <input placeholder="name" value="${channel.name}" data-field="name" style="width: 40%" />
+    <input placeholder="url" value="${channel.url}" data-field="url" style="width: 95%" />
+  </div>`;
 }
 
-function loadForm(cfg) {
-  byId("source_url").value = cfg.source_url;
-  byId("preset").value = cfg.preset;
-  byId("hls_time").value = cfg.hls_time;
-  byId("buffer_minutes").value = cfg.buffer_minutes;
-  byId("player_delay_seconds").value = cfg.player_delay_seconds;
-  byId("ffmpeg_threads").value = cfg.ffmpeg_threads;
-  byId("video_bitrate").value = cfg.video_bitrate;
-  byId("audio_bitrate").value = cfg.audio_bitrate;
+function render() {
+  if (!config) return;
+  document.getElementById("hls_time").value = config.hls_time;
+  document.getElementById("hls_list_size").value = config.hls_list_size;
+  document.getElementById("ffmpeg_threads").value = config.ffmpeg_threads;
+  document.getElementById("player_delay_seconds").value = config.player_delay_seconds;
+
+  const channelsDiv = document.getElementById("channels");
+  channelsDiv.innerHTML = config.channels
+    .map((c) => channelTemplate(c, c.id === config.active_channel_id))
+    .join("");
+
+  const relay = config.relay;
+  document.getElementById("streamStatus").textContent = relay.running
+    ? `Relay running (pid ${relay.pid}) source: ${relay.source_url}`
+    : "Relay stopped";
 }
 
-function collectForm() {
+function collectConfig() {
+  const channelEls = Array.from(document.querySelectorAll("#channels .channel"));
+  const channels = channelEls.map((el, idx) => {
+    const inputs = el.querySelectorAll("input[data-field]");
+    const channel = {
+      id: inputs[0].value.trim() || `channel-${idx + 1}`,
+      name: inputs[1].value.trim() || `Channel ${idx + 1}`,
+      url: inputs[2].value.trim(),
+    };
+    return channel;
+  });
+
+  const active = document.querySelector("input[name='active_channel']:checked")?.value || channels[0]?.id;
+
   return {
-    source_url: byId("source_url").value.trim(),
-    preset: byId("preset").value,
-    hls_time: Number(byId("hls_time").value),
-    buffer_minutes: Number(byId("buffer_minutes").value),
-    player_delay_seconds: Number(byId("player_delay_seconds").value),
-    ffmpeg_threads: Number(byId("ffmpeg_threads").value),
-    video_bitrate: byId("video_bitrate").value.trim(),
-    audio_bitrate: byId("audio_bitrate").value.trim(),
+    channels,
+    active_channel_id: active,
+    hls_time: Number(document.getElementById("hls_time").value),
+    hls_list_size: Number(document.getElementById("hls_list_size").value),
+    ffmpeg_threads: Number(document.getElementById("ffmpeg_threads").value),
+    player_delay_seconds: Number(document.getElementById("player_delay_seconds").value),
   };
 }
 
-function renderStatus(status) {
-  const healthy = status.running && status.playlist_exists && (status.playlist_age_seconds === null || status.playlist_age_seconds < 20);
-  const css = healthy ? "status-ok" : "status-bad";
-  byId("runtimeStatus").innerHTML = `
-    <span class="${css}">Relay: ${healthy ? "HEALTHY" : "NOT HEALTHY"}</span><br>
-    running=${status.running} pid=${status.pid ?? "-"} uptime=${status.uptime_seconds}s<br>
-    segments_on_disk=${status.segment_count} playlist_age=${status.playlist_age_seconds ?? "-"}s<br>
-    server_buffer=${status.effective_buffer_seconds ?? "-"}s list_size=${status.effective_hls_list_size ?? "-"}<br>
-    source=${status.source_url || "-"}<br>
-    last_error=${status.last_error || "none"} last_exit_code=${status.last_exit_code ?? "-"}
-  `;
+async function loadConfig() {
+  const res = await fetch("/api/config");
+  config = await res.json();
+  render();
+  setupPlayer();
 }
 
-function setupPlayer(delaySeconds) {
-  const video = byId("player");
-  const src = "/hls/live.m3u8";
-
-  if (hls) {
-    hls.destroy();
-    hls = null;
-  }
-
-  if (window.Hls && Hls.isSupported()) {
-    hls = new Hls({
+function setupPlayer() {
+  const video = document.getElementById("player");
+  const streamUrl = "/hls/live.m3u8";
+  if (Hls.isSupported()) {
+    const hls = new Hls({
       lowLatencyMode: false,
-      liveSyncDuration: Number(delaySeconds || 75),
-      maxBufferLength: 240,
-      maxMaxBufferLength: 360,
+      liveSyncDuration: Number(config.player_delay_seconds || 75),
+      maxBufferLength: 180,
+      maxMaxBufferLength: 240,
       backBufferLength: 180,
-      enableWorker: true,
     });
-    hls.loadSource(src);
+    hls.loadSource(streamUrl);
     hls.attachMedia(video);
   } else {
-    video.src = src;
+    video.src = streamUrl;
   }
 }
 
-async function loadState() {
-  const res = await fetch("/api/config", { cache: "no-store" });
-  state = await res.json();
-  loadForm(state.config);
-  renderStatus(state.status);
-  setupPlayer(state.config.player_delay_seconds);
+function addChannel() {
+  config.channels.push({ id: `new-${Date.now()}`, name: "New channel", url: "" });
+  render();
 }
 
 async function saveConfig() {
-  const payload = collectForm();
+  const payload = collectConfig();
   const res = await fetch("/api/config", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
-  const text = await res.text();
-  byId("message").textContent = res.ok ? "Saved and relay restarted." : `Save failed: ${text}`;
-  await loadState();
+  document.getElementById("message").textContent = res.ok ? "Saved + restarted" : `Save error: ${await res.text()}`;
+  await loadConfig();
 }
 
 async function startRelay() {
   await fetch("/api/start", { method: "POST" });
-  byId("message").textContent = "Relay start requested.";
-  await loadState();
+  await loadConfig();
 }
 
 async function stopRelay() {
   await fetch("/api/stop", { method: "POST" });
-  byId("message").textContent = "Relay stopped.";
-  await loadState();
+  await loadConfig();
 }
 
-async function refreshStatusOnly() {
-  const res = await fetch("/api/status", { cache: "no-store" });
-  if (!res.ok) return;
-  const status = await res.json();
-  renderStatus(status);
-}
-
-loadState();
-setInterval(refreshStatusOnly, 5000);
+loadConfig();

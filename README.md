@@ -1,75 +1,49 @@
-# Stream Relay (Single Source M3U8 -> Buffered Web Playback)
+# Simple Stream Relay (M3U8 -> Your Server -> Web UI)
 
-This app runs **one managed relay** on your server and serves many clients from that same output.
+Very simple project for Ubuntu AWS EC2:
 
-- Admin sets one upstream `source_url` (m3u8).
-- Server pulls it once with FFmpeg.
-- Server re-encodes to browser-friendly H.264 + AAC HLS.
-- Server keeps a rolling **few-minute buffer** window.
-- All web clients watch from server output `/hls/live.m3u8`.
+- Input: any M3U/M3U8 source URL.
+- Server pulls stream with FFmpeg.
+- Server re-publishes local HLS (`/hls/live.m3u8`) with bigger buffer.
+- Web admin page (no auth) to change URLs/settings.
 
-## Key improvement
+## Features
 
-- Buffer is configured in **minutes** (`buffer_minutes`) and calculated to HLS list size automatically.
-- This means your server stores a rolling window and clients read from that buffered stream.
-- Multi-client serving is supported through threaded HTTP server (`ThreadingHTTPServer`).
+- Unprotected admin panel (`/`) to edit channels and choose active channel.
+- FFmpeg relay with reconnect flags.
+- Adjustable buffer via `hls_time` + `hls_list_size` (ex: 4s * 30 = ~120s).
+- Adjustable player delay (`player_delay_seconds`) to avoid source jitter.
 
-## Run on Ubuntu EC2
+## Quick install (Ubuntu EC2)
 
 ```bash
 sudo apt update
-sudo apt install -y python3 ffmpeg
-cd /path/to/streamweb
+sudo apt install -y ffmpeg python3 python3-pip
+cd /workspace/streamweb
 python3 app.py
 ```
 
-Open in browser:
+Open: `http://YOUR_EC2_IP:8080`
 
-```text
-http://YOUR_EC2_PUBLIC_IP:8080
-```
+## Default channels
 
-If unreachable, allow inbound TCP **8080** in EC2 Security Group.
+- `http://161.248.38.40:8000/play/a071/index.m3u8`
+- `http://161.248.38.40:8000/play/a06v/index.m3u8`
+
+You can replace with any M3U8 source in admin UI.
+
+## Performance tips
+
+- Use EC2 near source region (lower latency).
+- Start with:
+  - `hls_time = 4`
+  - `hls_list_size = 30` (~2 min playlist)
+  - `player_delay_seconds = 60-90`
+- Keep `ffmpeg_threads = 0` (auto) unless CPU bottleneck.
+- Put app behind Nginx reverse proxy for production.
 
 ## Run in background
 
 ```bash
 nohup python3 app.py > app.log 2>&1 &
-tail -f app.log
 ```
-
-Stop:
-
-```bash
-pkill -f "python3 app.py"
-```
-
-## Admin config fields
-
-- `source_url`: your m3u8 URL
-- `preset`: ffmpeg speed preset (`veryfast` default)
-- `hls_time`: segment duration (seconds)
-- `buffer_minutes`: rolling buffer duration kept on server (minutes)
-- `player_delay_seconds`: player delay
-- `ffmpeg_threads`: `0` auto, or fixed threads
-- `video_bitrate`: e.g. `2500k`
-- `audio_bitrate`: e.g. `128k`
-
-## Recommended for unstable source
-
-- `hls_time = 4`
-- `buffer_minutes = 2` to `3`
-- `player_delay_seconds = 75` to `120`
-- `preset = veryfast`
-
-## API endpoints
-
-- `GET /api/config` => config + runtime status
-- `GET /api/status` => runtime status only
-- `POST /api/config` => save config + restart relay
-- `POST /api/start` => start relay
-- `POST /api/stop` => stop relay
-
-## Security note
-
-Admin is intentionally unprotected for now (as requested). Add authentication before public production use.
