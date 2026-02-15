@@ -3,83 +3,62 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stream Relay</title>
+  <title>Simple Stream Relay</title>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
   <style>
-    body { margin:0; font-family:Arial,sans-serif; background:#0f1115; color:#e9edf1; }
-    .wrap { max-width:1100px; margin:20px auto; padding:14px; }
-    .card { background:#191d24; border:1px solid #2a3240; border-radius:10px; padding:14px; margin-bottom:12px; }
-    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    @media(max-width:900px){ .grid{ grid-template-columns:1fr;} }
-    label { font-size:12px; color:#b4c1d1; display:block; margin-bottom:4px; }
-    input, select, button { width:100%; padding:9px; border-radius:8px; border:1px solid #3a4558; background:#12161d; color:#e9edf1; }
-    .rowbtn { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
-    .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
-    .status-ok { color:#70e28b; }
-    .status-bad { color:#ff8e8e; }
-    video { width:100%; max-height:68vh; background:#000; border-radius:10px; }
+    body { font-family: Arial, sans-serif; margin: 0; background:#111; color:#eee; }
+    .wrap { max-width: 1100px; margin: 20px auto; padding: 16px; }
+    .panel { background:#1d1d1d; border-radius:10px; padding:16px; margin-bottom:14px; }
+    input, select, button { padding:8px 10px; margin: 5px 0; border-radius:6px; border:1px solid #444; background:#222; color:#eee; }
+    button { cursor:pointer; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .channel { border:1px solid #333; border-radius:8px; padding:8px; margin-top:8px; }
+    video { width: 100%; max-height: 70vh; background:#000; border-radius:10px; }
+    .muted { color:#b5b5b5; font-size: 12px; }
+    .status { font-weight: bold; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
-      <h2>Live Player</h2>
+    <div class="panel">
+      <h2>Live Stream (Server Relayed)</h2>
       <video id="player" controls autoplay muted></video>
-      <div class="mono">Playback URL: <a href="/hls/live.m3u8" target="_blank">/hls/live.m3u8</a></div>
-      <div class="mono">Server stores rolling buffer in memory/disk window (minutes) and all clients read from server output.</div>
-      <div id="runtimeStatus" class="mono">Loading status...</div>
+      <div class="muted">Playback URL: <code>/hls/live.m3u8</code></div>
+      <div class="status" id="streamStatus">Loading status...</div>
     </div>
 
-    <div class="card">
+    <div class="panel">
       <h3>Admin (Unprotected)</h3>
-      <div class="grid">
+      <div class="row">
         <div>
-          <label>Source M3U8 URL</label>
-          <input id="source_url" placeholder="https://example.com/live/index.m3u8" />
-        </div>
-        <div>
-          <label>FFmpeg Preset</label>
-          <select id="preset">
-            <option>ultrafast</option>
-            <option selected>veryfast</option>
-            <option>faster</option>
-            <option>fast</option>
-            <option>medium</option>
-          </select>
-        </div>
-        <div>
-          <label>HLS Segment Seconds (2-10)</label>
+          <label>HLS Segment Seconds</label><br>
           <input id="hls_time" type="number" min="2" max="10" />
         </div>
         <div>
-          <label>Buffer Minutes on Server (1-10)</label>
-          <input id="buffer_minutes" type="number" min="1" max="10" />
+          <label>HLS Segment Count (buffer length)</label><br>
+          <input id="hls_list_size" type="number" min="15" max="120" />
         </div>
         <div>
-          <label>Player Delay Seconds (20-240)</label>
-          <input id="player_delay_seconds" type="number" min="20" max="240" />
-        </div>
-        <div>
-          <label>FFmpeg Threads (0=auto)</label>
+          <label>FFmpeg Threads (0=auto)</label><br>
           <input id="ffmpeg_threads" type="number" min="0" max="16" />
         </div>
         <div>
-          <label>Video Bitrate</label>
-          <input id="video_bitrate" placeholder="2500k" />
-        </div>
-        <div>
-          <label>Audio Bitrate</label>
-          <input id="audio_bitrate" placeholder="128k" />
+          <label>Player Delay Seconds</label><br>
+          <input id="player_delay_seconds" type="number" min="20" max="180" />
         </div>
       </div>
-      <div class="rowbtn" style="margin-top:10px;">
-        <button onclick="saveConfig()">Save + Restart</button>
-        <button onclick="startRelay()">Start</button>
-        <button onclick="stopRelay()">Stop</button>
-      </div>
-      <div id="message" class="mono" style="margin-top:10px;"></div>
+
+      <h4>Channels</h4>
+      <div id="channels"></div>
+      <button onclick="addChannel()">+ Add Channel</button>
+      <hr>
+      <button onclick="saveConfig()">Save + Restart Relay</button>
+      <button onclick="startRelay()">Start Relay</button>
+      <button onclick="stopRelay()">Stop Relay</button>
+      <div id="message" class="muted"></div>
     </div>
   </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>
