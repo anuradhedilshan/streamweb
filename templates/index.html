@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simple Stream Relay</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background:#111; color:#eee; }
+    .wrap { max-width: 1100px; margin: 20px auto; padding: 16px; }
+    .panel { background:#1d1d1d; border-radius:10px; padding:16px; margin-bottom:14px; }
+    input, select, button { padding:8px 10px; margin: 5px 0; border-radius:6px; border:1px solid #444; background:#222; color:#eee; }
+    button { cursor:pointer; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .channel { border:1px solid #333; border-radius:8px; padding:8px; margin-top:8px; }
+    video { width: 100%; max-height: 70vh; background:#000; border-radius:10px; }
+    .muted { color:#b5b5b5; font-size: 12px; }
+    .status { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h2>Live Stream (Server Relayed)</h2>
+      <video id="player" controls autoplay muted></video>
+      <div class="muted">Playback URL: <code>/hls/live.m3u8</code></div>
+      <div class="status" id="streamStatus">Loading status...</div>
+    </div>
+
+    <div class="panel">
+      <h3>Admin (Unprotected)</h3>
+      <div class="row">
+        <div>
+          <label>HLS Segment Seconds</label><br>
+          <input id="hls_time" type="number" min="2" max="10" />
+        </div>
+        <div>
+          <label>HLS Segment Count (buffer length)</label><br>
+          <input id="hls_list_size" type="number" min="15" max="120" />
+        </div>
+        <div>
+          <label>FFmpeg Threads (0=auto)</label><br>
+          <input id="ffmpeg_threads" type="number" min="0" max="16" />
+        </div>
+        <div>
+          <label>Player Delay Seconds</label><br>
+          <input id="player_delay_seconds" type="number" min="20" max="180" />
+        </div>
+      </div>
+
+      <h4>Channels</h4>
+      <div id="channels"></div>
+      <button onclick="addChannel()">+ Add Channel</button>
+      <hr>
+      <button onclick="saveConfig()">Save + Restart Relay</button>
+      <button onclick="startRelay()">Start Relay</button>
+      <button onclick="stopRelay()">Stop Relay</button>
+      <div id="message" class="muted"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
