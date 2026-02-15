@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stream Relay</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <style>
+    body { margin:0; font-family:Arial,sans-serif; background:#0f1115; color:#e9edf1; }
+    .wrap { max-width:1100px; margin:20px auto; padding:14px; }
+    .card { background:#191d24; border:1px solid #2a3240; border-radius:10px; padding:14px; margin-bottom:12px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    @media(max-width:900px){ .grid{ grid-template-columns:1fr;} }
+    label { font-size:12px; color:#b4c1d1; display:block; margin-bottom:4px; }
+    input, select, button { width:100%; padding:9px; border-radius:8px; border:1px solid #3a4558; background:#12161d; color:#e9edf1; }
+    .rowbtn { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+    .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+    .status-ok { color:#70e28b; }
+    .status-bad { color:#ff8e8e; }
+    video { width:100%; max-height:68vh; background:#000; border-radius:10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2>Live Player</h2>
+      <video id="player" controls autoplay muted></video>
+      <div class="mono">Playback URL: <a href="/hls/live.m3u8" target="_blank">/hls/live.m3u8</a></div>
+      <div class="mono">Server stores rolling buffer in memory/disk window (minutes) and all clients read from server output.</div>
+      <div id="runtimeStatus" class="mono">Loading status...</div>
+    </div>
+
+    <div class="card">
+      <h3>Admin (Unprotected)</h3>
+      <div class="grid">
+        <div>
+          <label>Source M3U8 URL</label>
+          <input id="source_url" placeholder="https://example.com/live/index.m3u8" />
+        </div>
+        <div>
+          <label>FFmpeg Preset</label>
+          <select id="preset">
+            <option>ultrafast</option>
+            <option selected>veryfast</option>
+            <option>faster</option>
+            <option>fast</option>
+            <option>medium</option>
+          </select>
+        </div>
+        <div>
+          <label>HLS Segment Seconds (2-10)</label>
+          <input id="hls_time" type="number" min="2" max="10" />
+        </div>
+        <div>
+          <label>Buffer Minutes on Server (1-10)</label>
+          <input id="buffer_minutes" type="number" min="1" max="10" />
+        </div>
+        <div>
+          <label>Player Delay Seconds (20-240)</label>
+          <input id="player_delay_seconds" type="number" min="20" max="240" />
+        </div>
+        <div>
+          <label>FFmpeg Threads (0=auto)</label>
+          <input id="ffmpeg_threads" type="number" min="0" max="16" />
+        </div>
+        <div>
+          <label>Video Bitrate</label>
+          <input id="video_bitrate" placeholder="2500k" />
+        </div>
+        <div>
+          <label>Audio Bitrate</label>
+          <input id="audio_bitrate" placeholder="128k" />
+        </div>
+      </div>
+      <div class="rowbtn" style="margin-top:10px;">
+        <button onclick="saveConfig()">Save + Restart</button>
+        <button onclick="startRelay()">Start</button>
+        <button onclick="stopRelay()">Stop</button>
+      </div>
+      <div id="message" class="mono" style="margin-top:10px;"></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
