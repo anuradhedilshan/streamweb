@@ -42,7 +42,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/playback/kick", s.playbackKick)
 	mux.HandleFunc("/monitoring/health", s.monitorHealth)
 	mux.HandleFunc("/monitoring/metrics", s.monitorMetrics)
-	mux.HandleFunc("/monitoring/errors", s.monitorErrors)
 	mux.HandleFunc("/internal/validate-playback", s.validatePlayback)
 }
 
@@ -257,10 +256,6 @@ func (s *Server) monitorHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) monitorMetrics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, s.svc.Metrics())
-}
-
-func (s *Server) monitorErrors(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, s.svc.ErrorSummary())
 }
 
 func (s *Server) validatePlayback(w http.ResponseWriter, r *http.Request) {

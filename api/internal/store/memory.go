@@ -15,7 +15,6 @@ type MemoryStore struct {
 	streams  map[string]model.Stream
 	sessions map[string]model.Session
 	ledger   []model.LedgerEntry
-	errors   map[string]int
 }
 
 func NewMemoryStore() *MemoryStore {
@@ -25,7 +24,6 @@ func NewMemoryStore() *MemoryStore {
 		streams:  map[string]model.Stream{},
 		sessions: map[string]model.Session{},
 		ledger:   []model.LedgerEntry{},
-		errors:   map[string]int{},
 	}
 	admin := model.User{ID: "u_admin", Email: "admin@local", Password: "admin", Role: "admin", Status: "active"}
 	demo := model.User{ID: "u_demo", Email: "demo@local", Password: "demo", Role: "user", Status: "active"}
@@ -147,11 +145,9 @@ func (s *MemoryStore) DeductPoints(userID, streamID, sessionID string, points in
 	defer s.mu.Unlock()
 	wallet, ok := s.wallets[userID]
 	if !ok {
-		s.errors["wallet_not_found"]++
 		return 0, fmt.Errorf("wallet not found")
 	}
 	if wallet.Balance <= 0 {
-		s.errors["insufficient_points"]++
 		return wallet.Balance, fmt.Errorf("insufficient points")
 	}
 	wallet.Balance -= points
@@ -173,27 +169,4 @@ func (s *MemoryStore) Metrics() map[string]int {
 		}
 	}
 	return map[string]int{"active_sessions": active, "ledger_entries": len(s.ledger)}
-}
-
-func (s *MemoryStore) ErrorSummary() map[string]int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := map[string]int{}
-	for k, v := range s.errors {
-		out[k] = v
-	}
-	return out
-}
-
-func (s *MemoryStore) PointsSpentLastMinute() int64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	cut := time.Now().UTC().Add(-time.Minute)
-	var total int64
-	for _, e := range s.ledger {
-		if e.CreatedAt.After(cut) && e.Delta < 0 {
-			total += -e.Delta
-		}
-	}
-	return total
 }

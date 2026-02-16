@@ -130,18 +130,7 @@ func (s *Service) Heartbeat(sessionID string) (map[string]any, int) {
 
 func (s *Service) StopSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "stopped") }
 func (s *Service) KickSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "blocked") }
-func (s *Service) Metrics() map[string]any {
-	m := map[string]any{}
-	for k, v := range s.repo.Metrics() {
-		m[k] = v
-	}
-	m["points_spent_per_minute"] = s.repo.PointsSpentLastMinute()
-	return m
-}
-
-func (s *Service) ErrorSummary() map[string]int {
-	return s.repo.ErrorSummary()
-}
+func (s *Service) Metrics() map[string]int      { return s.repo.Metrics() }
 
 func (s *Service) ValidatePlaybackToken(token, sessionID string) (int, string) {
 	parts := strings.Split(token, ":")
@@ -155,10 +144,6 @@ func (s *Service) ValidatePlaybackToken(token, sessionID string) (int, string) {
 	ss, ok := s.repo.GetSession(sessionID)
 	if !ok || ss.State != "active" {
 		return 403, "blocked"
-	}
-	stream, ok := s.repo.GetStream(ss.StreamID)
-	if !ok || stream.Status != "live" {
-		return 403, "stream_not_live"
 	}
 	return 200, "ok"
 }

@@ -76,7 +76,7 @@ Requirements:
 - [~] token/session validation hook (`auth_request`) wired
 - [x] segment caching
 - [x] manifest no-store behavior
-- [x] stream live + session active enforced in playback token validation (DB-backed pending)
+- [ ] stream live + session active enforced end-to-end with API+DB
 
 Security rules:
 - [ ] direct storage blocked in production
@@ -112,8 +112,8 @@ Points system:
 Monitoring endpoints:
 - [x] health
 - [x] metrics baseline
-- [x] error summary endpoint
-- [x] points consumption per minute metric
+- [ ] error summary endpoint
+- [ ] points consumption per minute metric
 
 ## MPV launcher
 - [x] `player login`
@@ -184,7 +184,6 @@ Gateway metrics:
 - [x] Removed previous simple Python relay/web UI code.
 - [x] Refactored API into modular packages for scalability and maintainability.
 - [x] Added basic rate limiting + playback token renew endpoint.
-- [x] Added monitoring error summary + points/min metric endpoints.
 - [x] Added Go player CLI baseline with mpv + heartbeat enforcement.
 - [x] Added SQL migration for full data model tables.
 - [x] Updated compose to include API service.
