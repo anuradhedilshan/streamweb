@@ -20,7 +20,6 @@ func New(repo store.Repository) *Service { return &Service{repo: repo} }
 func (s *Service) Login(email, password string) (map[string]any, error) {
 	u, ok := s.repo.FindUserByEmail(email)
 	if !ok || u.Password != password {
-		s.repo.IncLoginFailure()
 		return nil, fmt.Errorf("invalid credentials")
 	}
 	tok := auth.TokenForUser(u.ID, u.Role)
@@ -67,14 +66,6 @@ func (s *Service) SetStreamState(id, state string) bool {
 	return ok
 }
 
-func (s *Service) RestartStream(id string) bool {
-	if _, ok := s.repo.UpdateStream(id, func(st *model.Stream) { st.Status = "paused" }); !ok {
-		return false
-	}
-	_, ok := s.repo.UpdateStream(id, func(st *model.Stream) { st.Status = "live" })
-	return ok
-}
-
 func (s *Service) StreamRuntime(id string) (map[string]any, bool) {
 	st, ok := s.repo.GetStream(id)
 	if !ok {
@@ -86,21 +77,17 @@ func (s *Service) StreamRuntime(id string) (map[string]any, bool) {
 func (s *Service) StartPlayback(streamID, token, ip, userAgent string) (map[string]string, int, error) {
 	uid, _, err := auth.ParseUserToken(token)
 	if err != nil {
-		s.repo.IncPlaybackError()
 		return nil, 401, err
 	}
 	st, ok := s.repo.GetStream(streamID)
 	if !ok || st.Status != "live" {
-		s.repo.IncPlaybackError()
 		return nil, 400, fmt.Errorf("stream not live")
 	}
 	wallet, ok := s.repo.GetWallet(uid)
 	if !ok || wallet.Balance <= 0 {
-		s.repo.IncPlaybackError()
 		return nil, 402, fmt.Errorf("insufficient points")
 	}
 	if s.repo.ActiveUserSessionCount(uid) >= st.MaxConcurrentSessions {
-		s.repo.IncPlaybackError()
 		return nil, 429, fmt.Errorf("too many concurrent sessions")
 	}
 	ss := s.repo.CreateSession(uid, streamID, ip, userAgent)
@@ -112,11 +99,9 @@ func (s *Service) StartPlayback(streamID, token, ip, userAgent string) (map[stri
 func (s *Service) RenewPlayback(sessionID string) (map[string]string, int, error) {
 	ss, ok := s.repo.GetSession(sessionID)
 	if !ok {
-		s.repo.IncPlaybackError()
 		return nil, 404, fmt.Errorf("session not found")
 	}
 	if ss.State != "active" {
-		s.repo.IncPlaybackError()
 		return nil, 403, fmt.Errorf("session not active")
 	}
 	s.repo.TouchSession(ss.ID)
@@ -128,17 +113,14 @@ func (s *Service) RenewPlayback(sessionID string) (map[string]string, int, error
 func (s *Service) Heartbeat(sessionID string) (map[string]any, int) {
 	ss, ok := s.repo.GetSession(sessionID)
 	if !ok {
-		s.repo.IncPlaybackError()
 		return map[string]any{"error": "session not found"}, 404
 	}
 	st, ok := s.repo.GetStream(ss.StreamID)
 	if !ok {
-		s.repo.IncPlaybackError()
 		return map[string]any{"error": "stream not found"}, 404
 	}
 	remaining, err := s.repo.DeductPoints(ss.UserID, ss.StreamID, ss.ID, int64(st.PointsRate))
 	if err != nil || remaining <= 0 {
-		s.repo.IncPlaybackError()
 		s.repo.UpdateSessionState(ss.ID, "blocked")
 		return map[string]any{"state": "blocked", "balance_points": remaining}, 402
 	}
@@ -148,39 +130,20 @@ func (s *Service) Heartbeat(sessionID string) (map[string]any, int) {
 
 func (s *Service) StopSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "stopped") }
 func (s *Service) KickSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "blocked") }
-func (s *Service) Metrics() map[string]any {
-	m := map[string]any{}
-	for k, v := range s.repo.Metrics() {
-		m[k] = v
-	}
-	m["points_spent_per_minute"] = s.repo.PointsSpentLastMinute()
-	return m
-}
-
-func (s *Service) ErrorSummary() map[string]int {
-	return s.repo.ErrorSummary()
-}
+func (s *Service) Metrics() map[string]int      { return s.repo.Metrics() }
 
 func (s *Service) ValidatePlaybackToken(token, sessionID string) (int, string) {
 	parts := strings.Split(token, ":")
 	if len(parts) != 3 || parts[0] != "play" || parts[1] != sessionID {
-		s.repo.IncPlaybackError()
 		return 401, "invalid"
 	}
 	exp, _ := strconv.ParseInt(parts[2], 10, 64)
 	if time.Now().Unix() > exp {
-		s.repo.IncPlaybackError()
 		return 401, "expired"
 	}
 	ss, ok := s.repo.GetSession(sessionID)
 	if !ok || ss.State != "active" {
-		s.repo.IncPlaybackError()
 		return 403, "blocked"
-	}
-	stream, ok := s.repo.GetStream(ss.StreamID)
-	if !ok || stream.Status != "live" {
-		s.repo.IncPlaybackError()
-		return 403, "stream_not_live"
 	}
 	return 200, "ok"
 }

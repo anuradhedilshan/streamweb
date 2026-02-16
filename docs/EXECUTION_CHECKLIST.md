@@ -76,7 +76,7 @@ Requirements:
 - [~] token/session validation hook (`auth_request`) wired
 - [x] segment caching
 - [x] manifest no-store behavior
-- [x] stream live + session active enforced in playback token validation (DB-backed pending)
+- [ ] stream live + session active enforced end-to-end with API+DB
 
 Security rules:
 - [ ] direct storage blocked in production
@@ -94,7 +94,7 @@ Stream admin:
 - [x] create stream
 - [x] edit stream config (patch)
 - [x] change state
-- [x] restart stream endpoint (controller hook pending)
+- [~] restart stream (state hooks not bound to worker yet)
 - [x] runtime status endpoint
 
 Playback:
@@ -112,8 +112,8 @@ Points system:
 Monitoring endpoints:
 - [x] health
 - [x] metrics baseline
-- [x] error summary endpoint
-- [x] points consumption per minute metric
+- [ ] error summary endpoint
+- [ ] points consumption per minute metric
 
 ## MPV launcher
 - [x] `player login`
@@ -130,10 +130,10 @@ Monitoring endpoints:
 
 ## Monitoring
 API metrics:
-- [x] active_sessions
-- [x] points_spent_per_minute
-- [x] login_failures
-- [x] playback_errors
+- [~] active_sessions
+- [ ] points_spent_per_minute
+- [ ] login_failures
+- [ ] playback_errors
 
 Pipeline metrics:
 - [ ] ingest bitrate
@@ -184,16 +184,7 @@ Gateway metrics:
 - [x] Removed previous simple Python relay/web UI code.
 - [x] Refactored API into modular packages for scalability and maintainability.
 - [x] Added basic rate limiting + playback token renew endpoint.
-- [x] Added monitoring error summary + points/min metric endpoints.
 - [x] Added Go player CLI baseline with mpv + heartbeat enforcement.
 - [x] Added SQL migration for full data model tables.
 - [x] Updated compose to include API service.
 - [x] Updated README to new platform execution state.
-
-
-### Executed next 5 steps:
-- [x] Restart stream endpoint
-- [x] active_sessions metric finalized
-- [x] points_spent_per_minute metric finalized
-- [x] login_failures metric
-- [x] playback_errors metric

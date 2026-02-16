@@ -7,7 +7,7 @@ Current status:
 - Auth: login + refresh
 - Streams: create, patch, state change, runtime
 - Playback: start, heartbeat billing, stop, kick
-- Monitoring: health + metrics + error summary
+- Monitoring: health + metrics
 - Internal playback validation endpoint for NGINX auth_request
 
 Run locally:
@@ -31,10 +31,3 @@ Production next step:
 - `internal/store`: repository implementation (currently in-memory)
 - `internal/model`: domain models
 - `internal/auth`: token helpers
-
-
-Additional endpoints now available:
-- `GET /monitoring/errors`
-- `POST /playback/renew`
-
-- `POST /streams/:id/restart`

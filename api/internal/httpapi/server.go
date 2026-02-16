@@ -42,7 +42,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/playback/kick", s.playbackKick)
 	mux.HandleFunc("/monitoring/health", s.monitorHealth)
 	mux.HandleFunc("/monitoring/metrics", s.monitorMetrics)
-	mux.HandleFunc("/monitoring/errors", s.monitorErrors)
 	mux.HandleFunc("/internal/validate-playback", s.validatePlayback)
 }
 
@@ -144,19 +143,6 @@ func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, map[string]string{"stream_id": id, "state": body.State})
-		return
-	}
-	if strings.HasSuffix(path, "/restart") {
-		id := strings.TrimSuffix(path, "/restart")
-		if r.Method != http.MethodPost {
-			writeJSON(w, 405, map[string]string{"error": "method"})
-			return
-		}
-		if !s.svc.RestartStream(id) {
-			writeJSON(w, 404, map[string]string{"error": "not found"})
-			return
-		}
-		writeJSON(w, 200, map[string]string{"stream_id": id, "status": "restarted"})
 		return
 	}
 	if strings.HasSuffix(path, "/runtime") {
@@ -270,10 +256,6 @@ func (s *Server) monitorHealth(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) monitorMetrics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, s.svc.Metrics())
-}
-
-func (s *Server) monitorErrors(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, s.svc.ErrorSummary())
 }
 
 func (s *Server) validatePlayback(w http.ResponseWriter, r *http.Request) {
