@@ -79,3 +79,9 @@ Use:
 ## Implementation tracking
 
 Use `docs/EXECUTION_CHECKLIST.md` as the source of truth and mark items as work is completed.
+
+
+### New hardening added
+
+- Playback token renew endpoint: `POST /playback/renew`
+- Basic in-memory rate limiting on login and playback start endpoints

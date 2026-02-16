@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"streamweb/api/internal/model"
@@ -11,10 +12,14 @@ import (
 )
 
 type Server struct {
-	svc *service.Service
+	svc    *service.Service
+	rateMu sync.Mutex
+	rate   map[string][]time.Time
 }
 
-func NewServer(svc *service.Service) *Server { return &Server{svc: svc} }
+func NewServer(svc *service.Service) *Server {
+	return &Server{svc: svc, rate: map[string][]time.Time{}}
+}
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -31,6 +36,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/streams", s.createStream)
 	mux.HandleFunc("/streams/", s.streamRoutes)
 	mux.HandleFunc("/playback/start", s.playbackStart)
+	mux.HandleFunc("/playback/renew", s.playbackRenew)
 	mux.HandleFunc("/playback/heartbeat", s.playbackHeartbeat)
 	mux.HandleFunc("/playback/stop", s.playbackStop)
 	mux.HandleFunc("/playback/kick", s.playbackKick)
@@ -39,11 +45,37 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/internal/validate-playback", s.validatePlayback)
 }
 
+func (s *Server) allowRate(r *http.Request, bucket string, limit int, window time.Duration) bool {
+	key := bucket + ":" + r.RemoteAddr
+	now := time.Now()
+	cut := now.Add(-window)
+	s.rateMu.Lock()
+	defer s.rateMu.Unlock()
+	arr := s.rate[key]
+	kept := arr[:0]
+	for _, t := range arr {
+		if t.After(cut) {
+			kept = append(kept, t)
+		}
+	}
+	if len(kept) >= limit {
+		s.rate[key] = kept
+		return false
+	}
+	kept = append(kept, now)
+	s.rate[key] = kept
+	return true
+}
+
 func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, map[string]any{"status": "ok", "time": time.Now().UTC()})
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	if !s.allowRate(r, "login", 20, time.Minute) {
+		writeJSON(w, 429, map[string]string{"error": "rate limit"})
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -141,6 +173,10 @@ func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) playbackStart(w http.ResponseWriter, r *http.Request) {
+	if !s.allowRate(r, "playback_start", 30, time.Minute) {
+		writeJSON(w, 429, map[string]string{"error": "rate limit"})
+		return
+	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -151,6 +187,23 @@ func (s *Server) playbackStart(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = parseBody(r, &body)
 	resp, code, err := s.svc.StartPlayback(body.StreamID, body.Token, r.RemoteAddr, r.UserAgent())
+	if err != nil {
+		writeJSON(w, code, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, resp)
+}
+
+func (s *Server) playbackRenew(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, 405, map[string]string{"error": "method"})
+		return
+	}
+	var body struct {
+		SessionID string `json:"session_id"`
+	}
+	_ = parseBody(r, &body)
+	resp, code, err := s.svc.RenewPlayback(body.SessionID)
 	if err != nil {
 		writeJSON(w, code, map[string]string{"error": err.Error()})
 		return

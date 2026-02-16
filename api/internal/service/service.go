@@ -12,13 +12,13 @@ import (
 )
 
 type Service struct {
-	store *store.MemoryStore
+	repo store.Repository
 }
 
-func New(st *store.MemoryStore) *Service { return &Service{store: st} }
+func New(repo store.Repository) *Service { return &Service{repo: repo} }
 
 func (s *Service) Login(email, password string) (map[string]any, error) {
-	u, ok := s.store.FindUserByEmail(email)
+	u, ok := s.repo.FindUserByEmail(email)
 	if !ok || u.Password != password {
 		return nil, fmt.Errorf("invalid credentials")
 	}
@@ -41,11 +41,11 @@ func (s *Service) CreateStream(st model.Stream) model.Stream {
 	if st.Status == "" {
 		st.Status = "draft"
 	}
-	return s.store.CreateStream(st)
+	return s.repo.CreateStream(st)
 }
 
 func (s *Service) PatchStream(id string, body map[string]any) (model.Stream, bool) {
-	return s.store.UpdateStream(id, func(st *model.Stream) {
+	return s.repo.UpdateStream(id, func(st *model.Stream) {
 		if v, ok := body["name"].(string); ok {
 			st.Name = v
 		}
@@ -62,16 +62,16 @@ func (s *Service) PatchStream(id string, body map[string]any) (model.Stream, boo
 }
 
 func (s *Service) SetStreamState(id, state string) bool {
-	_, ok := s.store.UpdateStream(id, func(st *model.Stream) { st.Status = state })
+	_, ok := s.repo.UpdateStream(id, func(st *model.Stream) { st.Status = state })
 	return ok
 }
 
 func (s *Service) StreamRuntime(id string) (map[string]any, bool) {
-	st, ok := s.store.GetStream(id)
+	st, ok := s.repo.GetStream(id)
 	if !ok {
 		return nil, false
 	}
-	return map[string]any{"stream": st, "current_viewers": s.store.ActiveViewerCount(id), "last_manifest_at": time.Now().UTC()}, true
+	return map[string]any{"stream": st, "current_viewers": s.repo.ActiveViewerCount(id), "last_manifest_at": time.Now().UTC()}, true
 }
 
 func (s *Service) StartPlayback(streamID, token, ip, userAgent string) (map[string]string, int, error) {
@@ -79,44 +79,58 @@ func (s *Service) StartPlayback(streamID, token, ip, userAgent string) (map[stri
 	if err != nil {
 		return nil, 401, err
 	}
-	st, ok := s.store.GetStream(streamID)
+	st, ok := s.repo.GetStream(streamID)
 	if !ok || st.Status != "live" {
 		return nil, 400, fmt.Errorf("stream not live")
 	}
-	wallet, ok := s.store.GetWallet(uid)
+	wallet, ok := s.repo.GetWallet(uid)
 	if !ok || wallet.Balance <= 0 {
 		return nil, 402, fmt.Errorf("insufficient points")
 	}
-	if s.store.ActiveUserSessionCount(uid) >= st.MaxConcurrentSessions {
+	if s.repo.ActiveUserSessionCount(uid) >= st.MaxConcurrentSessions {
 		return nil, 429, fmt.Errorf("too many concurrent sessions")
 	}
-	ss := s.store.CreateSession(uid, streamID, ip, userAgent)
+	ss := s.repo.CreateSession(uid, streamID, ip, userAgent)
+	playToken := fmt.Sprintf("play:%s:%d", ss.ID, time.Now().Add(90*time.Second).Unix())
+	playURL := fmt.Sprintf("http://localhost:8088/play/%s/master.m3u8?token=%s", ss.ID, playToken)
+	return map[string]string{"session_id": ss.ID, "play_token": playToken, "play_url": playURL}, 200, nil
+}
+
+func (s *Service) RenewPlayback(sessionID string) (map[string]string, int, error) {
+	ss, ok := s.repo.GetSession(sessionID)
+	if !ok {
+		return nil, 404, fmt.Errorf("session not found")
+	}
+	if ss.State != "active" {
+		return nil, 403, fmt.Errorf("session not active")
+	}
+	s.repo.TouchSession(ss.ID)
 	playToken := fmt.Sprintf("play:%s:%d", ss.ID, time.Now().Add(90*time.Second).Unix())
 	playURL := fmt.Sprintf("http://localhost:8088/play/%s/master.m3u8?token=%s", ss.ID, playToken)
 	return map[string]string{"session_id": ss.ID, "play_token": playToken, "play_url": playURL}, 200, nil
 }
 
 func (s *Service) Heartbeat(sessionID string) (map[string]any, int) {
-	ss, ok := s.store.GetSession(sessionID)
+	ss, ok := s.repo.GetSession(sessionID)
 	if !ok {
 		return map[string]any{"error": "session not found"}, 404
 	}
-	st, ok := s.store.GetStream(ss.StreamID)
+	st, ok := s.repo.GetStream(ss.StreamID)
 	if !ok {
 		return map[string]any{"error": "stream not found"}, 404
 	}
-	remaining, err := s.store.DeductPoints(ss.UserID, ss.StreamID, ss.ID, int64(st.PointsRate))
+	remaining, err := s.repo.DeductPoints(ss.UserID, ss.StreamID, ss.ID, int64(st.PointsRate))
 	if err != nil || remaining <= 0 {
-		s.store.UpdateSessionState(ss.ID, "blocked")
+		s.repo.UpdateSessionState(ss.ID, "blocked")
 		return map[string]any{"state": "blocked", "balance_points": remaining}, 402
 	}
-	s.store.TouchSession(ss.ID)
+	s.repo.TouchSession(ss.ID)
 	return map[string]any{"state": "active", "balance_points": remaining}, 200
 }
 
-func (s *Service) StopSession(sessionID string) { s.store.UpdateSessionState(sessionID, "stopped") }
-func (s *Service) KickSession(sessionID string) { s.store.UpdateSessionState(sessionID, "blocked") }
-func (s *Service) Metrics() map[string]int      { return s.store.Metrics() }
+func (s *Service) StopSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "stopped") }
+func (s *Service) KickSession(sessionID string) { s.repo.UpdateSessionState(sessionID, "blocked") }
+func (s *Service) Metrics() map[string]int      { return s.repo.Metrics() }
 
 func (s *Service) ValidatePlaybackToken(token, sessionID string) (int, string) {
 	parts := strings.Split(token, ":")
@@ -127,7 +141,7 @@ func (s *Service) ValidatePlaybackToken(token, sessionID string) (int, string) {
 	if time.Now().Unix() > exp {
 		return 401, "expired"
 	}
-	ss, ok := s.store.GetSession(sessionID)
+	ss, ok := s.repo.GetSession(sessionID)
 	if !ok || ss.State != "active" {
 		return 403, "blocked"
 	}

@@ -99,7 +99,7 @@ Stream admin:
 
 Playback:
 - [x] start session
-- [ ] renew session token endpoint
+- [x] renew session token endpoint
 - [x] stop session
 - [x] kick session
 
@@ -147,7 +147,7 @@ Gateway metrics:
 
 ## Concurrency controls
 - [x] max sessions per user (at stream limit in start playback)
-- [ ] login/playback rate limit
+- [x] login/playback rate limit (basic in-memory)
 - [x] IP + user-agent stored per session
 - [x] admin kick session
 - [~] short token TTL (play token 90 seconds)
@@ -183,6 +183,7 @@ Gateway metrics:
 ## Work done this iteration
 - [x] Removed previous simple Python relay/web UI code.
 - [x] Refactored API into modular packages for scalability and maintainability.
+- [x] Added basic rate limiting + playback token renew endpoint.
 - [x] Added Go player CLI baseline with mpv + heartbeat enforcement.
 - [x] Added SQL migration for full data model tables.
 - [x] Updated compose to include API service.
