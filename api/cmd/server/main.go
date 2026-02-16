@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"os"
 
 	"streamweb/api/internal/httpapi"
 	"streamweb/api/internal/service"
@@ -12,8 +11,7 @@ import (
 
 func main() {
 	st := store.NewMemoryStore()
-	secret := os.Getenv("TOKEN_SECRET")
-	svc := service.New(st, secret)
+	svc := service.New(st)
 	srv := httpapi.NewServer(svc)
 
 	mux := http.NewServeMux()

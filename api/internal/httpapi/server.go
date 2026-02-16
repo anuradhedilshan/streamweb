@@ -29,26 +29,6 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func parseBody(r *http.Request, dst any) error { return json.NewDecoder(r.Body).Decode(dst) }
 
-func bearerToken(r *http.Request) string {
-	t := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	return strings.TrimSpace(t)
-}
-
-func (s *Server) requireRole(r *http.Request, role string) (string, bool) {
-	tok := bearerToken(r)
-	if tok == "" {
-		return "", false
-	}
-	uid, gotRole, err := s.svc.ParseBearerToken(tok)
-	if err != nil {
-		return "", false
-	}
-	if role != "" && gotRole != role {
-		return "", false
-	}
-	return uid, true
-}
-
 func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/healthz", s.health)
 	mux.HandleFunc("/auth/login", s.login)
@@ -62,7 +42,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/playback/kick", s.playbackKick)
 	mux.HandleFunc("/monitoring/health", s.monitorHealth)
 	mux.HandleFunc("/monitoring/metrics", s.monitorMetrics)
-	mux.HandleFunc("/monitoring/errors", s.monitorErrors)
 	mux.HandleFunc("/internal/validate-playback", s.validatePlayback)
 }
 
@@ -135,10 +114,6 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createStream(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireRole(r, "admin"); !ok {
-		writeJSON(w, 403, map[string]string{"error": "admin only"})
-		return
-	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -152,10 +127,6 @@ func (s *Server) createStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireRole(r, "admin"); !ok {
-		writeJSON(w, 403, map[string]string{"error": "admin only"})
-		return
-	}
 	path := strings.TrimPrefix(r.URL.Path, "/streams/")
 	if strings.HasSuffix(path, "/state") {
 		id := strings.TrimSuffix(path, "/state")
@@ -215,9 +186,6 @@ func (s *Server) playbackStart(w http.ResponseWriter, r *http.Request) {
 		Token    string `json:"token"`
 	}
 	_ = parseBody(r, &body)
-	if body.Token == "" {
-		body.Token = bearerToken(r)
-	}
 	resp, code, err := s.svc.StartPlayback(body.StreamID, body.Token, r.RemoteAddr, r.UserAgent())
 	if err != nil {
 		writeJSON(w, code, map[string]string{"error": err.Error()})
@@ -270,10 +238,6 @@ func (s *Server) playbackStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) playbackKick(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireRole(r, "admin"); !ok {
-		writeJSON(w, 403, map[string]string{"error": "admin only"})
-		return
-	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -294,12 +258,8 @@ func (s *Server) monitorMetrics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, s.svc.Metrics())
 }
 
-func (s *Server) monitorErrors(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, s.svc.ErrorSummary())
-}
-
 func (s *Server) validatePlayback(w http.ResponseWriter, r *http.Request) {
-	token := bearerToken(r)
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if token == "" {
 		token = r.URL.Query().Get("token")
 	}

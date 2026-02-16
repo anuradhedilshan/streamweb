@@ -1,15 +1,4 @@
 __pycache__/
 *.pyc
-*.log
-
-# Go build artifacts
-bin/
-player/player
-api/api
-
-# Local state
-.streamweb-player.json
-
-# Runtime data
-data/
-stream_output/
+data/config.json
+stream_output/*

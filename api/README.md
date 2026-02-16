@@ -7,7 +7,7 @@ Current status:
 - Auth: login + refresh
 - Streams: create, patch, state change, runtime
 - Playback: start, heartbeat billing, stop, kick
-- Monitoring: health + metrics + error summary
+- Monitoring: health + metrics
 - Internal playback validation endpoint for NGINX auth_request
 
 Run locally:
@@ -31,14 +31,3 @@ Production next step:
 - `internal/store`: repository implementation (currently in-memory)
 - `internal/model`: domain models
 - `internal/auth`: token helpers
-
-
-Additional endpoints now available:
-- `GET /monitoring/errors`
-- `POST /playback/renew`
-
-
-Security hardening now included:
-- Signed access/refresh tokens (HMAC, `TOKEN_SECRET`)
-- RBAC baseline: stream admin and kick endpoints require admin Bearer token
-- Built-in metrics now include `login_failures` and `playback_errors`

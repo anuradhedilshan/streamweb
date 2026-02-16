@@ -1,93 +1,49 @@
-# MPV-Based Streaming Platform (Execution Started)
+# Simple Stream Relay (M3U8 -> Your Server -> Web UI)
 
-This repository has been reset from the old single-file relay and now follows the requested platform plan structure.
+Very simple project for Ubuntu AWS EC2:
 
-## Current implemented baseline
+- Input: any M3U/M3U8 source URL.
+- Server pulls stream with FFmpeg.
+- Server re-publishes local HLS (`/hls/live.m3u8`) with bigger buffer.
+- Web admin page (no auth) to change URLs/settings.
 
-- Control-plane API scaffold (Go, stdlib HTTP) under `api/` with modular architecture (`internal/auth`, `internal/model`, `internal/store`, `internal/service`, `internal/httpapi`).
-- Player CLI scaffold (Go) under `player/`.
-- Dev stack: Postgres, Redis, MinIO, API, NGINX in `docker-compose.dev.yml`.
-- NGINX token-gated route template (`/play/{session_id}/*`) and direct test HLS route.
-- SQL schema migration file for core tables.
-- Living progress tracker: `docs/EXECUTION_CHECKLIST.md`.
+## Features
 
-## Repo structure
+- Unprotected admin panel (`/`) to edit channels and choose active channel.
+- FFmpeg relay with reconnect flags.
+- Adjustable buffer via `hls_time` + `hls_list_size` (ex: 4s * 30 = ~120s).
+- Adjustable player delay (`player_delay_seconds`) to avoid source jitter.
 
-- `infra/` infra configs
-- `api/` control-plane service
-- `admin/` admin dashboard scaffold
-- `player/` mpv launcher scaffold
-- `pipeline/` worker scaffold
-- `scripts/` helper scripts
-- `db/migrations/` SQL schema
-- `docs/` progress tracker
-
-## Quick start (dev)
+## Quick install (Ubuntu EC2)
 
 ```bash
-./scripts/dev-up.sh
+sudo apt update
+sudo apt install -y ffmpeg python3 python3-pip
+cd /workspace/streamweb
+python3 app.py
 ```
 
-Check services:
+Open: `http://YOUR_EC2_IP:8080`
+
+## Default channels
+
+- `http://161.248.38.40:8000/play/a071/index.m3u8`
+- `http://161.248.38.40:8000/play/a06v/index.m3u8`
+
+You can replace with any M3U8 source in admin UI.
+
+## Performance tips
+
+- Use EC2 near source region (lower latency).
+- Start with:
+  - `hls_time = 4`
+  - `hls_list_size = 30` (~2 min playlist)
+  - `player_delay_seconds = 60-90`
+- Keep `ffmpeg_threads = 0` (auto) unless CPU bottleneck.
+- Put app behind Nginx reverse proxy for production.
+
+## Run in background
 
 ```bash
-curl -sS http://127.0.0.1:8080/healthz
+nohup python3 app.py > app.log 2>&1 &
 ```
-
-## API quick flow
-
-1) login:
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/auth/login \
-  -H 'content-type: application/json' \
-  -d '{"email":"demo@local","password":"demo"}'
-```
-
-2) set stream live:
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/streams/stream-1/state \
-  -H 'content-type: application/json' \
-  -d '{"state":"live"}'
-```
-
-3) start playback session:
-
-```bash
-curl -sS -X POST http://127.0.0.1:8080/playback/start \
-  -H 'content-type: application/json' \
-  -d '{"stream_id":"stream-1","token":"token:u_demo:user"}'
-```
-
-## Player CLI
-
-Build:
-
-```bash
-cd player && go build ./cmd/player
-```
-
-Use:
-
-```bash
-./player login
-./player play stream-1
-./player logout
-```
-
-## Implementation tracking
-
-Use `docs/EXECUTION_CHECKLIST.md` as the source of truth and mark items as work is completed.
-
-
-### New hardening added
-
-- Playback token renew endpoint: `POST /playback/renew`
-- Basic in-memory rate limiting on login and playback start endpoints
-
-- Monitoring error summary endpoint: `GET /monitoring/errors`
-- Monitoring points spend metric included in `GET /monitoring/metrics` as `points_spent_per_minute`
-
-- Admin endpoints now require Bearer admin token (RBAC baseline).
-- Access/refresh tokens are signed with `TOKEN_SECRET` (set env in production).
