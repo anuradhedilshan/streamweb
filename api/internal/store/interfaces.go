@@ -16,7 +16,4 @@ type Repository interface {
 	TouchSession(sessionID string) bool
 	DeductPoints(userID, streamID, sessionID string, points int64) (int64, error)
 	Metrics() map[string]int
-	ErrorSummary() map[string]int
-	PointsSpentLastMinute() int64
-	IncrementError(kind string)
 }

@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"streamweb/api/internal/auth"
 	"streamweb/api/internal/model"
 	"streamweb/api/internal/service"
 )
@@ -43,7 +42,6 @@ func (s *Server) Register(mux *http.ServeMux) {
 	mux.HandleFunc("/playback/kick", s.playbackKick)
 	mux.HandleFunc("/monitoring/health", s.monitorHealth)
 	mux.HandleFunc("/monitoring/metrics", s.monitorMetrics)
-	mux.HandleFunc("/monitoring/errors", s.monitorErrors)
 	mux.HandleFunc("/internal/validate-playback", s.validatePlayback)
 }
 
@@ -66,37 +64,6 @@ func (s *Server) allowRate(r *http.Request, bucket string, limit int, window tim
 	}
 	kept = append(kept, now)
 	s.rate[key] = kept
-	return true
-}
-
-func bearerToken(r *http.Request) string {
-	authz := r.Header.Get("Authorization")
-	return strings.TrimSpace(strings.TrimPrefix(authz, "Bearer "))
-}
-
-func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (string, string, bool) {
-	tok := bearerToken(r)
-	if tok == "" {
-		writeJSON(w, 401, map[string]string{"error": "missing bearer token"})
-		return "", "", false
-	}
-	uid, role, err := auth.ParseUserToken(tok)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "invalid token"})
-		return "", "", false
-	}
-	return uid, role, true
-}
-
-func (s *Server) requireRole(w http.ResponseWriter, r *http.Request, wanted string) bool {
-	_, role, ok := s.requireAuth(w, r)
-	if !ok {
-		return false
-	}
-	if role != wanted {
-		writeJSON(w, 403, map[string]string{"error": "forbidden"})
-		return false
-	}
 	return true
 }
 
@@ -147,9 +114,6 @@ func (s *Server) refresh(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createStream(w http.ResponseWriter, r *http.Request) {
-	if !s.requireRole(w, r, "admin") {
-		return
-	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -165,9 +129,6 @@ func (s *Server) createStream(w http.ResponseWriter, r *http.Request) {
 func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/streams/")
 	if strings.HasSuffix(path, "/state") {
-		if !s.requireRole(w, r, "admin") {
-			return
-		}
 		id := strings.TrimSuffix(path, "/state")
 		if r.Method != http.MethodPost {
 			writeJSON(w, 405, map[string]string{"error": "method"})
@@ -185,9 +146,6 @@ func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if strings.HasSuffix(path, "/runtime") {
-		if _, _, ok := s.requireAuth(w, r); !ok {
-			return
-		}
 		id := strings.TrimSuffix(path, "/runtime")
 		resp, ok := s.svc.StreamRuntime(id)
 		if !ok {
@@ -198,9 +156,6 @@ func (s *Server) streamRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPatch {
-		if !s.requireRole(w, r, "admin") {
-			return
-		}
 		var body map[string]any
 		if err := parseBody(r, &body); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "invalid body"})
@@ -283,9 +238,6 @@ func (s *Server) playbackStop(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) playbackKick(w http.ResponseWriter, r *http.Request) {
-	if !s.requireRole(w, r, "admin") {
-		return
-	}
 	if r.Method != http.MethodPost {
 		writeJSON(w, 405, map[string]string{"error": "method"})
 		return
@@ -298,25 +250,12 @@ func (s *Server) playbackKick(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "kicked"})
 }
 
-func (s *Server) monitorHealth(w http.ResponseWriter, r *http.Request) {
-	if !s.requireRole(w, r, "admin") {
-		return
-	}
+func (s *Server) monitorHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, map[string]string{"status": "ok"})
 }
 
-func (s *Server) monitorMetrics(w http.ResponseWriter, r *http.Request) {
-	if !s.requireRole(w, r, "admin") {
-		return
-	}
+func (s *Server) monitorMetrics(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, 200, s.svc.Metrics())
-}
-
-func (s *Server) monitorErrors(w http.ResponseWriter, r *http.Request) {
-	if !s.requireRole(w, r, "admin") {
-		return
-	}
-	writeJSON(w, 200, s.svc.ErrorSummary())
 }
 
 func (s *Server) validatePlayback(w http.ResponseWriter, r *http.Request) {
